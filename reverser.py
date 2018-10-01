@@ -38,22 +38,44 @@ class ReverseLoop(cmd.Cmd):
         self.sample_file.rewind()
         self.output_data = b''
         input_data = self.sample_file.readframes(self.sample_file.getnframes())
-        peak_duration = self.sample_file.getframerate()*self.sample_file.getnchannels()//1000*250
+        peak_duration = int(self.sample_file.getframerate()*self.sample_file.getnchannels()/1000*250)
         #using audioop.findmax(fragment, length)
         global COUNT
         COUNT = 0
-        peaks = _find_maxes(input_data, peak_duration, 0, len(input_data), num_peaks)
-        #peaks = peaks[0:num_peaks]
+        #peaks = _find_maxes(input_data, peak_duration, 0, len(input_data), num_peaks)
+        peaks = [audioop.findmax(input_data, peak_duration)] 
+        width = self.sample_file.getsampwidth()
+        for i in range(num_peaks):
+            start = 0
+            end = len(input_data)
+            temp_peaks = []
+            for j in range(len(peaks)):
+                if peaks[j]*width-start > peak_duration*width:
+                    temp_peaks.append(audioop.findmax(input_data[start:peaks[j]*width], peak_duration))
+                start = (peaks[j]+peak_duration)*width
+            if len(input_data)-start > peak_duration*width:
+                temp_peaks.append(audioop.findmax(input_data[start:], peak_duration))
+            peaks.extend(temp_peaks)
+            peaks.sort()
+            print('------------------------------------------------')
+            print('found new peaks: {}\n{} remain'.format(temp_peaks, num_peaks-len(peaks)))
+            if len(peaks) >= num_peaks:
+                break
         peaks.sort()
         insert = 0
-        for i in range(num_peaks):
-            start = insert*2
-            stop = (peaks[i]+peak_duration)*2
-            insert = peaks[i]+peak_duration
-            self.output_data += audioop.reverse(input_data[start:stop],
-                                                self.sample_file.getsampwidth())
-        self.output_data += audioop.reverse(input_data[insert*2:],
-                                            self.sample_file.getsampwidth())
+        print('------------------------------------------------')
+        print('reversing!')
+        output = []
+        for i in range(len(peaks)):
+            if i%50==0:
+                print('reversing up to peak {}: {}'.format(i, peaks[i]))
+            start = insert*width
+            insert = peaks[i] + peak_duration
+            stop = insert*width
+            stop += start-stop%width
+            output.append(audioop.reverse(input_data[start:stop], width))
+        output.append(audioop.reverse(input_data[insert*2:], width))
+        self.output_data = b''.join(output)
         print('finished with data lengths: in: {} out: {}'.format(len(self.output_data),
                                                                   len(input_data)))
         #find the maximums, then search in the remaining data
@@ -62,6 +84,8 @@ class ReverseLoop(cmd.Cmd):
         return False
     
     def do_quit(self, arg):
+        if self.sample_file is not None:
+            self.sample_file.close()
         return True
 
 COUNT = 0
