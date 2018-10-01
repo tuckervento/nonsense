@@ -2,6 +2,8 @@ import audioop
 import wave
 import readline
 import cmd
+import sys
+import math
 
 class ReverseLoop(cmd.Cmd):
     intro = 'Welcome to the MaxReverser.  Enter \'help\' for a list of commands'
@@ -112,5 +114,13 @@ def _load_output_device(name):
     return #handle?
 
 
-cmd_loop = ReverseLoop()
-cmd_loop.cmdloop()
+if __name__ == '__main__':
+    cmd_loop = ReverseLoop()
+    if len(sys.argv) > 1:
+        cmds = sys.argv[1:]
+        for i in range(math.ceil(len(cmds)/2)):
+            this_cmd = ' '.join(cmds[i*2:i*2+2])
+            print('executing {}'.format(this_cmd))
+            cmd_loop.onecmd(this_cmd)
+    else:
+        cmd_loop.cmdloop()
