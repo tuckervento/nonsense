@@ -15,7 +15,6 @@ class ReverseLoop(cmd.Cmd):
     def do_load_file(self, arg):
         '''
         Load the file from the specified path.
-
         Args:
             path - absolute path to a .wav file
         '''
@@ -25,7 +24,6 @@ class ReverseLoop(cmd.Cmd):
     def do_write_file(self, arg):
         '''
         Write the current output data to the specified path.
-
         Args:
             path - absolute path to a new .wav file
         '''
@@ -42,21 +40,30 @@ class ReverseLoop(cmd.Cmd):
         input_data = self.sample_file.readframes(self.sample_file.getnframes())
         peak_duration = int(self.sample_file.getframerate()*self.sample_file.getnchannels()/1000*250)
         #using audioop.findmax(fragment, length)
-        global COUNT
-        COUNT = 0
         #peaks = _find_maxes(input_data, peak_duration, 0, len(input_data), num_peaks)
         peaks = [audioop.findmax(input_data, peak_duration)] 
         width = self.sample_file.getsampwidth()
+        in_width = int(width / self.sample_file.getnchannels())
+        width = in_width
         for i in range(num_peaks):
             start = 0
-            end = len(input_data)
             temp_peaks = []
+            print(peaks)
             for j in range(len(peaks)):
-                if peaks[j]*width-start > peak_duration*width:
-                    temp_peaks.append(audioop.findmax(input_data[start:peaks[j]*width], peak_duration))
-                start = (peaks[j]+peak_duration)*width
-            if len(input_data)-start > peak_duration*width:
-                temp_peaks.append(audioop.findmax(input_data[start:], peak_duration))
+                if peaks[j]*in_width-start > peak_duration*in_width:
+                    print('checking from {} to {}'.format(start, peaks[j]*in_width))
+                    if len(input_data[start:peaks[j]*in_width])%2!=0:
+                      start-=1
+                    temp_peaks.append(start + audioop.findmax(input_data[start:peaks[j]*in_width], peak_duration))
+                else:
+                  print('skipping because of size: {}'.format(peaks[j]))
+                start = (peaks[j]+peak_duration)*in_width
+                print('start is now: {}'.format(start))
+            if len(input_data)-start > peak_duration*in_width:
+                print('checking the end from: {}'.format(start))
+                if len(input_data[start:])%2!=0:
+                  start -= 1
+                temp_peaks.append(start + audioop.findmax(input_data[start:], peak_duration))
             peaks.extend(temp_peaks)
             peaks.sort()
             print('------------------------------------------------')
@@ -66,11 +73,13 @@ class ReverseLoop(cmd.Cmd):
         peaks.sort()
         insert = 0
         print('------------------------------------------------')
+        print('found peaks: {}'.format(peaks))
+        print('------------------------------------------------')
         print('reversing!')
         output = []
         for i in range(len(peaks)):
-            if i%50==0:
-                print('reversing up to peak {}: {}'.format(i, peaks[i]))
+            #if i%50==0:
+            print('reversing up to peak {}: {}'.format(i, peaks[i]))
             start = insert*width
             insert = peaks[i] + peak_duration
             stop = insert*width
@@ -78,7 +87,7 @@ class ReverseLoop(cmd.Cmd):
             output.append(audioop.reverse(input_data[start:stop], width))
         output.append(audioop.reverse(input_data[insert*2:], width))
         self.output_data = b''.join(output)
-        print('finished with data lengths: in: {} out: {}'.format(len(self.output_data),
+        print('finished with data lengths: in: {1} out: {0}'.format(len(self.output_data),
                                                                   len(input_data)))
         #find the maximums, then search in the remaining data
         #continue until len(peaks) == num_peaks
@@ -89,30 +98,6 @@ class ReverseLoop(cmd.Cmd):
         if self.sample_file is not None:
             self.sample_file.close()
         return True
-
-COUNT = 0
-
-def _find_maxes(data, duration, start, stop, num):
-    global COUNT
-    return_list = []
-    if stop - start < duration:
-        return return_list
-    try:
-        m = audioop.findmax(data[start:stop], duration)
-    except audioop.error:
-        print('got an error with data: {} {}'.format(start, stop))
-        return return_list
-    COUNT+=1
-    return_list.append(m)
-    if COUNT < num:
-        return_list.extend(_find_maxes(data, duration, start, m*2, num))
-        return_list.extend(_find_maxes(data, duration, (m+duration)*2, stop, num))
-    return return_list
-
-
-def _load_output_device(name):
-    return #handle?
-
 
 if __name__ == '__main__':
     cmd_loop = ReverseLoop()
